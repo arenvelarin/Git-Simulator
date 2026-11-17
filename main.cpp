@@ -1,8 +1,10 @@
 #include <iostream>
 #include <string>
+#include "Workspace.h"
 
 int main() {
     std::string command;
+    Workspace workspace;
 
     while (true) {
         std::cout << "$ ";
@@ -17,6 +19,9 @@ int main() {
             }
             else if (command == "exit") {
                 break;
+            }
+            else if (command == "pwd") {
+                std::cout << workspace.pwd() << std::endl;
             }
             else {
                 throw std::string("Unknown command: " + command);
