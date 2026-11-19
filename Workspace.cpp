@@ -47,7 +47,7 @@ std::string Workspace::ls() const {
     for (const std::string& name : names) {
         result += name + "\n";
     }
-    
+
     return result;
 }
 
@@ -77,4 +77,25 @@ void Workspace::mkdir(const std::string& name) {
         delete directory;
         throw;
     }
+}
+
+void Workspace::touch(const std::string& name) {
+    if (name.empty() || name == "." || name == ".." ||
+        name.find('/') != std::string::npos) {
+        throw std::string("Invalid file name");
+    }
+
+    for (const Directory* directory : current->directories) {
+        if (directory->name == name) {
+            throw std::string("Name already exists: ") + name;
+        }
+    }
+
+    for (const File& file : current->files) {
+        if (file.name == name) {
+            return;
+        }
+    }
+
+    current->files.push_back(File{name, {}});
 }
