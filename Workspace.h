@@ -16,6 +16,7 @@ public:
     std::string ls() const;
     void mkdir(const std::string& name);
     void touch(const std::string& name);
+    void cd(const std::string& path);
 };
 
 #endif

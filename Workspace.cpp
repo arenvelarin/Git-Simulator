@@ -1,4 +1,5 @@
 #include "Workspace.h"
+#include <sstream>
 
 Workspace::Workspace()
     : root("/", nullptr), current(&root) {
@@ -98,4 +99,51 @@ void Workspace::touch(const std::string& name) {
     }
 
     current->files.push_back(File{name, {}});
+}
+
+void Workspace::cd(const std::string& path) {
+    if (path.empty()) {
+        throw std::string("Usage: cd <directory-path>");
+    }
+
+    Directory* target = current;
+
+    // If the path starts with /, start from the root.
+    if (path.front() == '/') {
+        while (target->parent != nullptr) {
+            target = target->parent;
+        }
+    }
+
+    std::istringstream input(path);
+    std::string part;
+
+    while (std::getline(input, part, '/')) {
+        if (part.empty() || part == ".") {
+            continue;
+        }
+
+        if (part == "..") {
+            if (target->parent != nullptr) {
+                target = target->parent;
+            }
+            continue;
+        }
+
+        Directory* next = nullptr;
+        for (Directory* directory : target->directories) {
+            if (directory->name == part) {
+                next = directory;
+                break;
+            }
+        }
+
+        if (next == nullptr) {
+            throw std::string("Directory not found: ") + path;
+        }
+
+        target = next;
+    }
+
+    current = target;
 }

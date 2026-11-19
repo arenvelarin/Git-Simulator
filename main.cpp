@@ -47,6 +47,16 @@ int main() {
 
                 workspace.touch(name);
             }
+            else if (command == "cd" || command.rfind("cd ", 0) == 0) {
+                std::istringstream input(command);
+                std::string verb, path, extra;
+
+                if (!(input >> verb >> path) || (input >> extra)) {
+                    throw std::string("Usage: cd <directory-path>");
+                }
+
+                workspace.cd(path);
+            }
             else {
                 throw std::string("Unknown command: " + command);
             }
