@@ -23,6 +23,9 @@ int main() {
             else if (command == "pwd") {
                 std::cout << workspace.pwd() << std::endl;
             }
+            else if (command == "ls") {
+                std::cout << workspace.ls();
+            }
             else {
                 throw std::string("Unknown command: " + command);
             }
