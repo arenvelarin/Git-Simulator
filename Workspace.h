@@ -15,6 +15,7 @@ public:
     std::string pwd() const;
     std::string ls() const;
     void mkdir(const std::string& name);
+    void touch(const std::string& name);
 };
 
 #endif

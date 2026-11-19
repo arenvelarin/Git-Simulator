@@ -37,6 +37,16 @@ int main() {
 
                 workspace.mkdir(name);
             }
+            else if (command == "touch" || command.rfind("touch ", 0) == 0) {
+                std::istringstream input(command);
+                std::string verb, name, extra;
+
+                if (!(input >> verb >> name) || (input >> extra)) {
+                    throw std::string("Usage: touch <file-name>");
+                }
+
+                workspace.touch(name);
+            }
             else {
                 throw std::string("Unknown command: " + command);
             }
