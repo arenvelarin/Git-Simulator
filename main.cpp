@@ -102,6 +102,16 @@ int main() {
 
                 std::cout << workspace.cat(name);
             }
+            else if (command == "rm" || command.rfind("rm ", 0) == 0) {
+                std::istringstream input(command);
+                std::string verb, name, extra;
+
+                if (!(input >> verb >> name) || (input >> extra)) {
+                    throw std::string("Usage: rm <file-name>");
+                }
+
+                workspace.rm(name);
+            }
             else {
                 throw std::string("Unknown command: " + command);
             }

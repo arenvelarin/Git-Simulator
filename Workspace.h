@@ -19,6 +19,7 @@ public:
     void cd(const std::string& path);
     void echo(const std::string& text, const std::string& name, bool append);
     std::string cat(const std::string& name) const;
+    void rm(const std::string& name);
 };
 
 #endif

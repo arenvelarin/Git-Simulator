@@ -178,3 +178,20 @@ std::string Workspace::cat(const std::string& name) const {
 
     throw std::string("File not found: ") + name;
 }
+
+void Workspace::rm(const std::string& name) {
+    for (auto it = current->files.begin(); it != current->files.end(); ++it) {
+        if (it->name == name) {
+            current->files.erase(it);
+            return;
+        }
+    }
+
+    for (const Directory* directory : current->directories) {
+        if (directory->name == name) {
+            throw std::string("Cannot remove a directory: ") + name;
+        }
+    }
+
+    throw std::string("File not found: ") + name;
+}
