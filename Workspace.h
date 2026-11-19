@@ -13,6 +13,7 @@ public:
     Workspace();
 
     std::string pwd() const;
+    std::string ls() const;
 };
 
 #endif

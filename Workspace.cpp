@@ -20,3 +20,16 @@ std::string Workspace::pwd() const {
     return path;
 }
 
+std::string Workspace::ls() const {
+    std::string result;
+
+    for (const Directory* directory : current->directories) {
+        result += directory->name + "/\n";
+    }
+
+    for (const File& file : current->files) {
+        result += file.name + "\n";
+    }
+
+    return result;
+}
