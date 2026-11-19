@@ -147,3 +147,34 @@ void Workspace::cd(const std::string& path) {
 
     current = target;
 }
+
+void Workspace::echo(const std::string& text,
+                     const std::string& name,
+                     bool append) {
+    touch(name);
+
+    for (File& file : current->files) {
+        if (file.name == name) {
+            if (!append) {
+                file.lines.clear();
+            }
+
+            file.lines.push_back(text);
+            return;
+        }
+    }
+}
+
+std::string Workspace::cat(const std::string& name) const {
+    for (const File& file : current->files) {
+        if (file.name == name) {
+            std::string result;
+            for (const std::string& line : file.lines) {
+                result += line + "\n";
+            }
+            return result;
+        }
+    }
+
+    throw std::string("File not found: ") + name;
+}

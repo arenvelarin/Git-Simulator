@@ -17,6 +17,8 @@ public:
     void mkdir(const std::string& name);
     void touch(const std::string& name);
     void cd(const std::string& path);
+    void echo(const std::string& text, const std::string& name, bool append);
+    std::string cat(const std::string& name) const;
 };
 
 #endif
