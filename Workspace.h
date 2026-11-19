@@ -14,6 +14,7 @@ public:
 
     std::string pwd() const;
     std::string ls() const;
+    void mkdir(const std::string& name);
 };
 
 #endif

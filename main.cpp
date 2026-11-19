@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <sstream>
 #include "Workspace.h"
 
 int main() {
@@ -25,6 +26,16 @@ int main() {
             }
             else if (command == "ls") {
                 std::cout << workspace.ls();
+            }
+            else if (command == "mkdir" || command.rfind("mkdir ", 0) == 0) {
+                std::istringstream input(command);
+                std::string verb, name, extra;
+
+                if (!(input >> verb >> name) || (input >> extra)) {
+                    throw std::string("Usage: mkdir <directory-name>");
+                }
+
+                workspace.mkdir(name);
             }
             else {
                 throw std::string("Unknown command: " + command);

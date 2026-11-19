@@ -50,3 +50,31 @@ std::string Workspace::ls() const {
     
     return result;
 }
+
+void Workspace::mkdir(const std::string& name) {
+    if (name.empty() || name == "." || name == ".." ||
+        name.find('/') != std::string::npos) {
+        throw std::string("Invalid directory name");
+    }
+
+    for (const Directory* directory : current->directories) {
+        if (directory->name == name) {
+            throw std::string("Name already exists: ") + name;
+        }
+    }
+
+    for (const File& file : current->files) {
+        if (file.name == name) {
+            throw std::string("Name already exists: ") + name;
+        }
+    }
+
+    Directory* directory = new Directory(name, current);
+    try {
+        current->directories.push_back(directory);
+    }
+    catch (...) {
+        delete directory;
+        throw;
+    }
+}
