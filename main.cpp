@@ -6,6 +6,8 @@
 int main() {
     std::string command;
     Workspace workspace;
+    std::string userName;
+    std::string userEmail;
 
     while (true) {
         std::cout << "$ ";
@@ -111,6 +113,41 @@ int main() {
                 }
 
                 workspace.rm(name);
+            }
+            else if (command == "git config" || command.rfind("git config ", 0) == 0) {
+                const std::string usage =
+                    "Usage: git config user.name|user.email \"<value>\"";
+
+                std::istringstream input(command);
+                std::string git, config, key, value, extra;
+                char quote;
+
+                // Read: git config user.name
+                input >> git >> config >> key;
+                if (key != "user.name" && key != "user.email") {
+                    throw usage;
+                }
+
+                // Read the opening quote. >> skips spaces before it.
+                if (!(input >> quote) || quote != '"') {
+                    throw usage;
+                }
+
+                // Read the whole value, including spaces, up to the closing quote.
+                std::getline(input, value, '"');
+                if (input.eof() || value.empty()) {
+                    throw usage;
+                }
+
+                if (input >> extra) {
+                    throw usage;
+                }
+
+                if (key == "user.name") {
+                    userName = value;
+                } else {
+                    userEmail = value;
+                }
             }
             else {
                 throw std::string("Unknown command: " + command);
