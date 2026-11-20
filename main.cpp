@@ -162,6 +162,14 @@ int main() {
                     workspace.initRepository();
                 } else if (!workspace.hasRepository()) {
                     throw std::string("Not a git repository");
+                } else if (subcommand == "add") {
+                    std::string name;
+
+                    if (!(input >> name) || (input >> extra)) {
+                        throw std::string("Usage: git add <file-name>|.");
+                    }
+
+                    workspace.add(name);
                 } else {
                     throw std::string("Unknown command: " + command);
                 }

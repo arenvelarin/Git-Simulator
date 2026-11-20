@@ -10,12 +10,25 @@ private:
     Directory root;
     Directory* current;
 
+    struct StagedFile {
+        std::string path;
+        std::vector<std::string> lines;
+    };
+
     struct Repository {
         Directory* root;
         std::string branchName;
+        std::vector<StagedFile> staging;
     };
 
     std::vector<Repository> repositories;
+
+    std::string relativeDirectoryPath(const Directory* directory,
+                                      const Directory* repositoryRoot) const;
+
+    void collectFiles(const Directory* directory,
+                      const std::string& prefix,
+                      std::vector<StagedFile>& files) const;
 
 public:
     Workspace();
@@ -31,6 +44,7 @@ public:
 
     bool hasRepository() const;
     void initRepository();
+    void add(const std::string& name);
 };
 
 #endif

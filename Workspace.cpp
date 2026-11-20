@@ -215,5 +215,103 @@ void Workspace::initRepository() {
         throw std::string("Already inside a git repository");
     }
 
-    repositories.push_back(Repository{current, "main"});
+    repositories.push_back(Repository{current, "main", {}});
+}
+
+std::string Workspace::relativeDirectoryPath(
+    const Directory* directory,
+    const Directory* repositoryRoot) const {
+
+    std::string path;
+
+    while (directory != repositoryRoot) {
+        path = directory->name + "/" + path;
+        directory = directory->parent;
+    }
+
+    return path;
+}
+
+void Workspace::collectFiles(
+    const Directory* directory,
+    const std::string& prefix,
+    std::vector<StagedFile>& files) const {
+
+    for (const File& file : directory->files) {
+        files.push_back(StagedFile{prefix + file.name, file.lines});
+    }
+
+    for (const Directory* child : directory->directories) {
+        collectFiles(child, prefix + child->name + "/", files);
+    }
+}
+
+void Workspace::add(const std::string& name) {
+    // Find the closest repository root, starting at the current directory.
+    Repository* repository = nullptr;
+
+    for (Directory* directory = current;
+         directory != nullptr && repository == nullptr;
+         directory = directory->parent) {
+
+        for (Repository& candidate : repositories) {
+            if (candidate.root == directory) {
+                repository = &candidate;
+                break;
+            }
+        }
+    }
+
+    if (repository == nullptr) {
+        throw std::string("Not a git repository");
+    }
+
+    const std::string prefix = relativeDirectoryPath(current, repository->root);
+    auto& staging = repository->staging;
+
+    if (name == ".") {
+        // Remove old entries only for the current directory and its children.
+        for (auto it = staging.begin(); it != staging.end();) {
+            if (it->path.rfind(prefix, 0) == 0) {
+                it = staging.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Copy the files that still exist in this part of the workspace.
+        collectFiles(current, prefix, staging);
+        return;
+    }
+
+    if (name == ".." || name.find_first_of("/\\") != std::string::npos) {
+        throw std::string("Usage: git add <file-name>|.");
+    }
+
+    const std::string path = prefix + name;
+
+    // If the file exists, update its staged copy or add a new one.
+    for (const File& file : current->files) {
+        if (file.name == name) {
+            for (StagedFile& stagedFile : staging) {
+                if (stagedFile.path == path) {
+                    stagedFile.lines = file.lines;
+                    return;
+                }
+            }
+
+            staging.push_back(StagedFile{path, file.lines});
+            return;
+        }
+    }
+
+    // If the workspace file was deleted, remove its staged entry.
+    for (auto it = staging.begin(); it != staging.end(); ++it) {
+        if (it->path == path) {
+            staging.erase(it);
+            return;
+        }
+    }
+
+    throw std::string("File not found: " + name);
 }
