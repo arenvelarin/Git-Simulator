@@ -1,4 +1,5 @@
 #include "Workspace.h"
+#include <algorithm>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
@@ -442,4 +443,91 @@ void Workspace::reset(const std::string& name) {
     if (committedFile != nullptr) {
         staging.push_back(*committedFile);
     }
+}
+
+void Workspace::status() {
+    const Repository& repository = currentRepository();
+    const std::vector<StagedFile> emptySnapshot;
+    const auto& committed = repository.commits.empty()
+        ? emptySnapshot
+        : repository.commits.back().snapshot;
+    const auto& staging = repository.staging;
+
+    std::vector<StagedFile> working;
+    collectFiles(repository.root, "", working);
+
+    struct StatusEntry {
+        std::string path;
+        std::string label;
+    };
+
+    std::vector<StatusEntry> stagedChanges;
+    std::vector<StatusEntry> unstagedChanges;
+    std::vector<StatusEntry> untrackedFiles;
+
+    auto findFile = [](const std::vector<StagedFile>& files,
+                       const std::string& path) -> const StagedFile* {
+        for (const StagedFile& file : files) {
+            if (file.path == path) {
+                return &file;
+            }
+        }
+        return nullptr;
+    };
+
+    for (const StagedFile& file : staging) {
+        const StagedFile* oldFile = findFile(committed, file.path);
+        if (oldFile == nullptr) {
+            stagedChanges.push_back({file.path, "new file: "});
+        } else if (oldFile->lines != file.lines) {
+            stagedChanges.push_back({file.path, "modified: "});
+        }
+
+        const StagedFile* workingFile = findFile(working, file.path);
+        if (workingFile == nullptr) {
+            unstagedChanges.push_back({file.path, "deleted: "});
+        } else if (workingFile->lines != file.lines) {
+            unstagedChanges.push_back({file.path, "modified: "});
+        }
+    }
+
+    for (const StagedFile& file : committed) {
+        if (findFile(staging, file.path) == nullptr) {
+            stagedChanges.push_back({file.path, "deleted: "});
+        }
+    }
+
+    for (const StagedFile& file : working) {
+        if (findFile(staging, file.path) == nullptr) {
+            untrackedFiles.push_back({file.path, ""});
+        }
+    }
+
+    auto printSection = [](const char* title, std::vector<StatusEntry>& entries) {
+        if (entries.empty()) {
+            return;
+        }
+
+        std::sort(entries.begin(), entries.end(),
+                  [](const StatusEntry& a, const StatusEntry& b) {
+                      return a.path < b.path;
+                  });
+
+        std::cout << '\n' << title << ":\n";
+        for (const StatusEntry& entry : entries) {
+            std::cout << "    " << entry.label << entry.path << '\n';
+        }
+    };
+
+    std::cout << "On branch " << repository.branchName << '\n';
+
+    if (stagedChanges.empty() && unstagedChanges.empty() &&
+        untrackedFiles.empty()) {
+        std::cout << "nothing to commit, working tree clean\n";
+        return;
+    }
+
+    printSection("Staged changes", stagedChanges);
+    printSection("Modified (not staged)", unstagedChanges);
+    printSection("Untracked files", untrackedFiles);
 }
