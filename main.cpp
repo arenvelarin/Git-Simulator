@@ -204,6 +204,12 @@ int main() {
                     }
 
                     workspace.status();
+                } else if (subcommand == "log") {
+                    if (input >> extra) {
+                        throw std::string("Usage: git log");
+                    }
+
+                    workspace.log();
                 } else {
                     throw std::string("Unknown command: " + command);
                 }
