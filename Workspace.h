@@ -66,6 +66,7 @@ public:
     void commit(const std::string& message,
                 const std::string& authorName,
                 const std::string& authorEmail);
+    void status();
 };
 
 #endif

@@ -198,6 +198,12 @@ int main() {
                     }
 
                     workspace.commit(message, userName, userEmail);
+                } else if (subcommand == "status") {
+                    if (input >> extra) {
+                        throw std::string("Usage: git status");
+                    }
+
+                    workspace.status();
                 } else {
                     throw std::string("Unknown command: " + command);
                 }
