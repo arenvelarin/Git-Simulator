@@ -1,4 +1,7 @@
 #include "Workspace.h"
+#include <ctime>
+#include <iomanip>
+#include <iostream>
 #include <sstream>
 
 Workspace::Workspace()
@@ -215,7 +218,7 @@ void Workspace::initRepository() {
         throw std::string("Already inside a git repository");
     }
 
-    repositories.push_back(Repository{current, "main", {}});
+    repositories.push_back(Repository{current, "main", {}, {}});
 }
 
 std::string Workspace::relativeDirectoryPath(
@@ -316,36 +319,127 @@ void Workspace::add(const std::string& name) {
     throw std::string("File not found: " + name);
 }
 
+Workspace::Repository& Workspace::currentRepository() {
+    for (Directory* directory = current;
+         directory != nullptr;
+         directory = directory->parent) {
+        for (Repository& repository : repositories) {
+            if (repository.root == directory) {
+                return repository;
+            }
+        }
+    }
+
+    throw std::string("Not a git repository");
+}
+
+bool Workspace::sameSnapshot(const std::vector<StagedFile>& left,
+                             const std::vector<StagedFile>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+
+    // Compare by path, not by position in the vector.
+    for (const StagedFile& file : left) {
+        bool found = false;
+
+        for (const StagedFile& other : right) {
+            if (file.path == other.path && file.lines == other.lines) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void Workspace::commit(const std::string& message,
+                       const std::string& authorName,
+                       const std::string& authorEmail) {
+    Repository& repository = currentRepository();
+
+    if (authorName.empty() || authorEmail.empty()) {
+        throw std::string("Set user.name and user.email before committing");
+    }
+
+    const bool hasCommit = !repository.commits.empty();
+    const std::vector<StagedFile> emptySnapshot;
+    const auto& previous = hasCommit
+        ? repository.commits.back().snapshot
+        : emptySnapshot;
+
+    if (sameSnapshot(repository.staging, previous)) {
+        std::vector<StagedFile> workingFiles;
+        collectFiles(repository.root, "", workingFiles);
+
+        if (sameSnapshot(workingFiles, repository.staging)) {
+            std::cout << "nothing to commit, working tree clean\n";
+        } else {
+            std::cout << "no changes added to commit\n";
+        }
+
+        return;
+    }
+
+    const int parentId = hasCommit ? repository.commits.back().id : 0;
+    const std::time_t now = std::time(nullptr);
+    const std::tm* localTime = std::localtime(&now);
+
+    if (localTime == nullptr) {
+        throw std::string("Could not read the commit time");
+    }
+
+    std::ostringstream date;
+    date << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
+
+    const int id = nextCommitId;
+    repository.commits.push_back(Commit{
+        id, parentId, message, authorName, authorEmail,
+        date.str(), repository.staging
+    });
+    ++nextCommitId;
+
+    std::cout << '[' << repository.branchName << ' ' << id
+              << "] " << message << '\n';
+}
+
 void Workspace::reset(const std::string& name) {
     if (name == "." || name == ".." ||
         name.find_first_of("/\\") != std::string::npos) {
         throw std::string("Usage: git reset <file-name>");
     }
 
-    // Find the repository containing the current directory.
-    for (Directory* directory = current;
-         directory != nullptr;
-         directory = directory->parent) {
-        for (Repository& repository : repositories) {
-            if (repository.root != directory) {
-                continue;
+    Repository& repository = currentRepository();
+    const std::string path = relativeDirectoryPath(current, repository.root) + name;
+
+    const StagedFile* committedFile = nullptr;
+    if (!repository.commits.empty()) {
+        for (const StagedFile& file : repository.commits.back().snapshot) {
+            if (file.path == path) {
+                committedFile = &file;
+                break;
             }
+        }
+    }
 
-            const std::string path =
-                relativeDirectoryPath(current, repository.root) + name;
-
-            // There is no commit snapshot yet, so just unstage the file.
-            for (auto it = repository.staging.begin();
-                 it != repository.staging.end(); ++it) {
-                if (it->path == path) {
-                    repository.staging.erase(it);
-                    break;
-                }
+    auto& staging = repository.staging;
+    for (auto it = staging.begin(); it != staging.end(); ++it) {
+        if (it->path == path) {
+            if (committedFile != nullptr) {
+                it->lines = committedFile->lines;
+            } else {
+                staging.erase(it);
             }
-
             return;
         }
     }
 
-    throw std::string("Not a git repository");
+    if (committedFile != nullptr) {
+        staging.push_back(*committedFile);
+    }
 }

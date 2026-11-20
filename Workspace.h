@@ -15,13 +15,30 @@ private:
         std::vector<std::string> lines;
     };
 
+    struct Commit {
+        int id;
+        int parentId; // 0 means there is no parent
+        std::string message;
+        std::string authorName;
+        std::string authorEmail;
+        std::string date;
+        std::vector<StagedFile> snapshot;
+    };
+
     struct Repository {
         Directory* root;
         std::string branchName;
         std::vector<StagedFile> staging;
+        std::vector<Commit> commits;
     };
 
     std::vector<Repository> repositories;
+    int nextCommitId = 1;
+
+    Repository& currentRepository();
+
+    static bool sameSnapshot(const std::vector<StagedFile>& left,
+                             const std::vector<StagedFile>& right);
 
     std::string relativeDirectoryPath(const Directory* directory,
                                       const Directory* repositoryRoot) const;
@@ -46,6 +63,9 @@ public:
     void initRepository();
     void add(const std::string& name);
     void reset(const std::string& name);
+    void commit(const std::string& message,
+                const std::string& authorName,
+                const std::string& authorEmail);
 };
 
 #endif

@@ -178,6 +178,26 @@ int main() {
                     }
 
                     workspace.reset(name);
+                } else if (subcommand == "commit") {
+                    std::string option;
+                    const std::string usage = "Usage: git commit -m \"<message>\"";
+
+                    if (!(input >> option) || option != "-m") {
+                        throw usage;
+                    }
+
+                    input >> std::ws;
+                    if (input.get() != '"') {
+                        throw usage;
+                    }
+
+                    std::string message;
+                    if (!std::getline(input, message, '"') || input.eof() ||
+                        message.empty() || (input >> extra)) {
+                        throw usage;
+                    }
+
+                    workspace.commit(message, userName, userEmail);
                 } else {
                     throw std::string("Unknown command: " + command);
                 }
