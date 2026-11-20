@@ -170,6 +170,14 @@ int main() {
                     }
 
                     workspace.add(name);
+                } else if (subcommand == "reset") {
+                    std::string name;
+
+                    if (!(input >> name) || (input >> extra)) {
+                        throw std::string("Usage: git reset <file-name>");
+                    }
+
+                    workspace.reset(name);
                 } else {
                     throw std::string("Unknown command: " + command);
                 }

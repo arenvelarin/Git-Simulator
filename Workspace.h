@@ -45,6 +45,7 @@ public:
     bool hasRepository() const;
     void initRepository();
     void add(const std::string& name);
+    void reset(const std::string& name);
 };
 
 #endif

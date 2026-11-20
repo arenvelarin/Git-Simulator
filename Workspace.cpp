@@ -315,3 +315,37 @@ void Workspace::add(const std::string& name) {
 
     throw std::string("File not found: " + name);
 }
+
+void Workspace::reset(const std::string& name) {
+    if (name == "." || name == ".." ||
+        name.find_first_of("/\\") != std::string::npos) {
+        throw std::string("Usage: git reset <file-name>");
+    }
+
+    // Find the repository containing the current directory.
+    for (Directory* directory = current;
+         directory != nullptr;
+         directory = directory->parent) {
+        for (Repository& repository : repositories) {
+            if (repository.root != directory) {
+                continue;
+            }
+
+            const std::string path =
+                relativeDirectoryPath(current, repository.root) + name;
+
+            // There is no commit snapshot yet, so just unstage the file.
+            for (auto it = repository.staging.begin();
+                 it != repository.staging.end(); ++it) {
+                if (it->path == path) {
+                    repository.staging.erase(it);
+                    break;
+                }
+            }
+
+            return;
+        }
+    }
+
+    throw std::string("Not a git repository");
+}
