@@ -149,6 +149,23 @@ int main() {
                     userEmail = value;
                 }
             }
+            else if (command == "git" || command.rfind("git ", 0) == 0) {
+                std::istringstream input(command);
+                std::string git, subcommand, extra;
+                input >> git >> subcommand;
+
+                if (subcommand == "init") {
+                    if (input >> extra) {
+                        throw std::string("Usage: git init");
+                    }
+
+                    workspace.initRepository();
+                } else if (!workspace.hasRepository()) {
+                    throw std::string("Not a git repository");
+                } else {
+                    throw std::string("Unknown command: " + command);
+                }
+            }
             else {
                 throw std::string("Unknown command: " + command);
             }

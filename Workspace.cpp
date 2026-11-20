@@ -195,3 +195,25 @@ void Workspace::rm(const std::string& name) {
 
     throw std::string("File not found: ") + name;
 }
+
+bool Workspace::hasRepository() const {
+    for (const Directory* directory = current;
+         directory != nullptr;
+         directory = directory->parent) {
+        for (const Repository& repository : repositories) {
+            if (repository.root == directory) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void Workspace::initRepository() {
+    if (hasRepository()) {
+        throw std::string("Already inside a git repository");
+    }
+
+    repositories.push_back(Repository{current, "main"});
+}
