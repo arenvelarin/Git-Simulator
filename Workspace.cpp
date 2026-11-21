@@ -380,10 +380,49 @@ const Workspace::Commit* Workspace::findCommit(
     return nullptr;
 }
 
+int Workspace::headCommitId(Repository& repository) {
+    if (repository.detachedCommitId != 0) {
+        return repository.detachedCommitId;
+    }
+
+    return activeBranch(repository).tipCommitId;
+}
+
+void Workspace::ensureCheckoutClean(Repository& repository) {
+    const Commit* head = findCommit(repository, headCommitId(repository));
+    const std::vector<StagedFile> emptySnapshot;
+    const auto& committed = head != nullptr ? head->snapshot : emptySnapshot;
+
+    // Staged changes: compare the staging area with HEAD.
+    if (!sameSnapshot(repository.staging, committed)) {
+        throw std::string("Commit or discard your changes before checkout");
+    }
+
+    std::vector<StagedFile> working;
+    collectFiles(repository.root, "", working);
+
+    // Unstaged changes: check only tracked files.
+    for (const StagedFile& staged : repository.staging) {
+        const auto it = std::find_if(
+            working.begin(), working.end(),
+            [&staged](const StagedFile& file) {
+                return file.path == staged.path;
+            });
+
+        if (it == working.end() || it->lines != staged.lines) {
+            throw std::string("Commit or discard your changes before checkout");
+        }
+    }
+}
+
 void Workspace::commit(const std::string& message,
                        const std::string& authorName,
                        const std::string& authorEmail) {
     Repository& repository = currentRepository();
+
+    if (repository.detachedCommitId != 0) {
+        throw std::string("Cannot commit in detached HEAD state");
+    }
 
     if (authorName.empty() || authorEmail.empty()) {
         throw std::string("Set user.name and user.email before committing");
@@ -439,9 +478,10 @@ void Workspace::reset(const std::string& name) {
     Repository& repository = currentRepository();
     const std::string path = relativeDirectoryPath(current, repository.root) + name;
 
+    const Commit* head = findCommit(repository, headCommitId(repository));
     const StagedFile* committedFile = nullptr;
-    if (!repository.commits.empty()) {
-        for (const StagedFile& file : repository.commits.back().snapshot) {
+    if (head != nullptr) {
+        for (const StagedFile& file : head->snapshot) {
             if (file.path == path) {
                 committedFile = &file;
                 break;
@@ -467,11 +507,10 @@ void Workspace::reset(const std::string& name) {
 }
 
 void Workspace::status() {
-    const Repository& repository = currentRepository();
+    Repository& repository = currentRepository();
+    const Commit* head = findCommit(repository, headCommitId(repository));
     const std::vector<StagedFile> emptySnapshot;
-    const auto& committed = repository.commits.empty()
-        ? emptySnapshot
-        : repository.commits.back().snapshot;
+    const auto& committed = head != nullptr ? head->snapshot : emptySnapshot;
     const auto& staging = repository.staging;
 
     std::vector<StagedFile> working;
@@ -540,7 +579,11 @@ void Workspace::status() {
         }
     };
 
-    std::cout << "On branch " << repository.branchName << '\n';
+    if (repository.detachedCommitId != 0) {
+        std::cout << "HEAD detached at " << repository.detachedCommitId << '\n';
+    } else {
+        std::cout << "On branch " << repository.branchName << '\n';
+    }
 
     if (stagedChanges.empty() && unstagedChanges.empty() &&
         untrackedFiles.empty()) {
@@ -554,23 +597,24 @@ void Workspace::status() {
 }
 
 void Workspace::log() {
-    const Repository& repository = currentRepository();
-    const auto& commits = repository.commits;
+    Repository& repository = currentRepository();
+    const Commit* entry = findCommit(repository, headCommitId(repository));
 
-    if (commits.empty()) {
+    if (entry == nullptr) {
         throw std::string("No commits yet");
     }
 
-    for (auto it = commits.rbegin(); it != commits.rend(); ++it) {
-        if (it != commits.rbegin()) {
+    while (entry != nullptr) {
+        std::cout << "commit " << entry->id << '\n'
+                  << "Author: " << entry->authorName
+                  << " <" << entry->authorEmail << ">\n"
+                  << "Date: " << entry->date << "\n\n"
+                  << "    " << entry->message << '\n';
+
+        entry = findCommit(repository, entry->parentId);
+        if (entry != nullptr) {
             std::cout << '\n';
         }
-
-        std::cout << "commit " << it->id << '\n'
-                  << "Author: " << it->authorName
-                  << " <" << it->authorEmail << ">\n"
-                  << "Date: " << it->date << "\n\n"
-                  << "    " << it->message << '\n';
     }
 }
 
@@ -585,7 +629,8 @@ void Workspace::listBranches() {
     std::sort(names.begin(), names.end());
 
     for (const std::string& name : names) {
-        std::cout << (name == repository.branchName ? "* " : "  ")
+        std::cout << (repository.detachedCommitId == 0 &&
+                      name == repository.branchName ? "* " : "  ")
                   << name << '\n';
     }
 }
@@ -602,7 +647,7 @@ void Workspace::createBranch(const std::string& name) {
         throw std::string("Invalid branch name: ") + name;
     }
 
-    const int tipCommitId = activeBranch(repository).tipCommitId;
+    const int tipCommitId = headCommitId(repository);
     if (tipCommitId == 0) {
         throw std::string("No commits yet");
     }
@@ -619,7 +664,7 @@ void Workspace::createBranch(const std::string& name) {
 void Workspace::deleteBranch(const std::string& name) {
     Repository& repository = currentRepository();
 
-    if (name == repository.branchName) {
+    if (repository.detachedCommitId == 0 && name == repository.branchName) {
         throw std::string("Cannot delete the active branch: ") + name;
     }
 
@@ -632,4 +677,181 @@ void Workspace::deleteBranch(const std::string& name) {
     }
 
     throw std::string("Branch not found: ") + name;
+}
+
+void Workspace::checkout(const std::string& name) {
+    Repository& repository = currentRepository();
+
+    bool byId = !name.empty();
+    for (char ch : name) {
+        if (ch < '0' || ch > '9') {
+            byId = false;
+            break;
+        }
+    }
+
+    const Commit* target = nullptr;
+
+    if (byId) {
+        for (const Commit& commit : repository.commits) {
+            if (std::to_string(commit.id) == name) {
+                target = &commit;
+                break;
+            }
+        }
+
+        if (target == nullptr) {
+            throw std::string("Commit not found: ") + name;
+        }
+    } else {
+        const Branch* targetBranch = nullptr;
+        for (const Branch& branch : repository.branches) {
+            if (branch.name == name) {
+                targetBranch = &branch;
+                break;
+            }
+        }
+
+        if (targetBranch == nullptr) {
+            throw std::string("Branch not found: ") + name;
+        }
+
+        if (repository.detachedCommitId == 0 && name == repository.branchName) {
+            std::cout << "Already on '" << name << "'\n";
+            return;
+        }
+
+        target = findCommit(repository, targetBranch->tipCommitId);
+    }
+
+    ensureCheckoutClean(repository);
+
+    const std::vector<StagedFile> emptySnapshot;
+    const auto& destination = target != nullptr ? target->snapshot : emptySnapshot;
+
+    auto hasPath = [](const std::vector<StagedFile>& files,
+                      const std::string& path) {
+        for (const StagedFile& file : files) {
+            if (file.path == path) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::vector<StagedFile> working;
+    collectFiles(repository.root, "", working);
+
+    // Keep untracked files, but reject any path collision.
+    for (const StagedFile& file : working) {
+        if (hasPath(repository.staging, file.path)) {
+            continue;
+        }
+
+        for (const StagedFile& next : destination) {
+            if (file.path == next.path ||
+                next.path.rfind(file.path + "/", 0) == 0 ||
+                file.path.rfind(next.path + "/", 0) == 0) {
+                throw std::string("Untracked file would be overwritten: ") +
+                      file.path;
+            }
+        }
+    }
+
+    // Find the containing directory without changing the shell's current path.
+    auto parentFor = [&repository](const std::string& path, bool create) {
+        Directory* parent = repository.root;
+        std::size_t start = 0;
+        std::size_t slash;
+
+        while ((slash = path.find('/', start)) != std::string::npos) {
+            const std::string part = path.substr(start, slash - start);
+            Directory* child = nullptr;
+
+            for (Directory* directory : parent->directories) {
+                if (directory->name == part) {
+                    child = directory;
+                    break;
+                }
+            }
+
+            if (child == nullptr) {
+                if (!create) {
+                    return static_cast<Directory*>(nullptr);
+                }
+
+                child = new Directory(part, parent);
+                try {
+                    parent->directories.push_back(child);
+                } catch (...) {
+                    delete child;
+                    throw;
+                }
+            }
+
+            parent = child;
+            start = slash + 1;
+        }
+
+        return parent;
+    };
+
+    auto fileName = [](const std::string& path) {
+        const auto slash = path.rfind('/');
+        return slash == std::string::npos ? path : path.substr(slash + 1);
+    };
+
+    // Do not replace an existing directory with a file.
+    for (const StagedFile& file : destination) {
+        Directory* parent = parentFor(file.path, false);
+        if (parent != nullptr) {
+            for (const Directory* child : parent->directories) {
+                if (child->name == fileName(file.path)) {
+                    throw std::string("Directory blocks checkout: ") + file.path;
+                }
+            }
+        }
+    }
+
+    // Remove tracked files that do not exist in the destination.
+    for (const StagedFile& file : repository.staging) {
+        if (hasPath(destination, file.path)) {
+            continue;
+        }
+
+        Directory* parent = parentFor(file.path, false);
+        if (parent != nullptr) {
+            const std::string base = fileName(file.path);
+            auto& files = parent->files;
+            files.erase(std::remove_if(files.begin(), files.end(),
+                [&base](const File& entry) { return entry.name == base; }),
+                files.end());
+        }
+    }
+
+    // Restore destination contents, leaving unrelated files untouched.
+    for (const StagedFile& file : destination) {
+        Directory* parent = parentFor(file.path, true);
+        const std::string base = fileName(file.path);
+        auto& files = parent->files;
+        const auto it = std::find_if(files.begin(), files.end(),
+            [&base](const File& entry) { return entry.name == base; });
+
+        if (it == files.end()) {
+            files.push_back(File{base, file.lines});
+        } else {
+            it->lines = file.lines;
+        }
+    }
+
+    repository.staging = destination;
+
+    if (byId) {
+        repository.detachedCommitId = target->id;
+        std::cout << "HEAD detached at " << target->id << '\n';
+    } else {
+        repository.branchName = name;
+        repository.detachedCommitId = 0;
+        std::cout << "Switched to branch '" << name << "'\n";
+    }
 }
