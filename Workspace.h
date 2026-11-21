@@ -67,6 +67,7 @@ public:
                 const std::string& authorName,
                 const std::string& authorEmail);
     void status();
+    void log();
 };
 
 #endif

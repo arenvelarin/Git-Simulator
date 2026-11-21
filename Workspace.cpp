@@ -531,3 +531,24 @@ void Workspace::status() {
     printSection("Modified (not staged)", unstagedChanges);
     printSection("Untracked files", untrackedFiles);
 }
+
+void Workspace::log() {
+    const Repository& repository = currentRepository();
+    const auto& commits = repository.commits;
+
+    if (commits.empty()) {
+        throw std::string("No commits yet");
+    }
+
+    for (auto it = commits.rbegin(); it != commits.rend(); ++it) {
+        if (it != commits.rbegin()) {
+            std::cout << '\n';
+        }
+
+        std::cout << "commit " << it->id << '\n'
+                  << "Author: " << it->authorName
+                  << " <" << it->authorEmail << ">\n"
+                  << "Date: " << it->date << "\n\n"
+                  << "    " << it->message << '\n';
+    }
+}
