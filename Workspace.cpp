@@ -219,7 +219,7 @@ void Workspace::initRepository() {
         throw std::string("Already inside a git repository");
     }
 
-    repositories.push_back(Repository{current, "main", {}, {}});
+    repositories.push_back(Repository{current, "main", {}, {}, {{"main", 0}}});
 }
 
 std::string Workspace::relativeDirectoryPath(
@@ -359,6 +359,27 @@ bool Workspace::sameSnapshot(const std::vector<StagedFile>& left,
     return true;
 }
 
+Workspace::Branch& Workspace::activeBranch(Repository& repository) {
+    for (Branch& branch : repository.branches) {
+        if (branch.name == repository.branchName) {
+            return branch;
+        }
+    }
+
+    throw std::string("Active branch not found");
+}
+
+const Workspace::Commit* Workspace::findCommit(
+    const Repository& repository, int id) {
+    for (const Commit& commit : repository.commits) {
+        if (commit.id == id) {
+            return &commit;
+        }
+    }
+
+    return nullptr;
+}
+
 void Workspace::commit(const std::string& message,
                        const std::string& authorName,
                        const std::string& authorEmail) {
@@ -368,11 +389,10 @@ void Workspace::commit(const std::string& message,
         throw std::string("Set user.name and user.email before committing");
     }
 
-    const bool hasCommit = !repository.commits.empty();
+    Branch& branch = activeBranch(repository);
+    const Commit* head = findCommit(repository, branch.tipCommitId);
     const std::vector<StagedFile> emptySnapshot;
-    const auto& previous = hasCommit
-        ? repository.commits.back().snapshot
-        : emptySnapshot;
+    const auto& previous = head != nullptr ? head->snapshot : emptySnapshot;
 
     if (sameSnapshot(repository.staging, previous)) {
         std::vector<StagedFile> workingFiles;
@@ -387,7 +407,7 @@ void Workspace::commit(const std::string& message,
         return;
     }
 
-    const int parentId = hasCommit ? repository.commits.back().id : 0;
+    const int parentId = branch.tipCommitId;
     const std::time_t now = std::time(nullptr);
     const std::tm* localTime = std::localtime(&now);
 
@@ -403,6 +423,7 @@ void Workspace::commit(const std::string& message,
         id, parentId, message, authorName, authorEmail,
         date.str(), repository.staging
     });
+    branch.tipCommitId = id;
     ++nextCommitId;
 
     std::cout << '[' << repository.branchName << ' ' << id
@@ -551,4 +572,64 @@ void Workspace::log() {
                   << "Date: " << it->date << "\n\n"
                   << "    " << it->message << '\n';
     }
+}
+
+void Workspace::listBranches() {
+    const Repository& repository = currentRepository();
+    std::vector<std::string> names;
+
+    for (const Branch& branch : repository.branches) {
+        names.push_back(branch.name);
+    }
+
+    std::sort(names.begin(), names.end());
+
+    for (const std::string& name : names) {
+        std::cout << (name == repository.branchName ? "* " : "  ")
+                  << name << '\n';
+    }
+}
+
+void Workspace::createBranch(const std::string& name) {
+    Repository& repository = currentRepository();
+
+    const std::string allowed =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-";
+
+    if (name.empty() ||
+        name.find_first_not_of(allowed) != std::string::npos ||
+        name.find_first_not_of("0123456789") == std::string::npos) {
+        throw std::string("Invalid branch name: ") + name;
+    }
+
+    const int tipCommitId = activeBranch(repository).tipCommitId;
+    if (tipCommitId == 0) {
+        throw std::string("No commits yet");
+    }
+
+    for (const Branch& branch : repository.branches) {
+        if (branch.name == name) {
+            throw std::string("Branch already exists: ") + name;
+        }
+    }
+
+    repository.branches.push_back(Branch{name, tipCommitId});
+}
+
+void Workspace::deleteBranch(const std::string& name) {
+    Repository& repository = currentRepository();
+
+    if (name == repository.branchName) {
+        throw std::string("Cannot delete the active branch: ") + name;
+    }
+
+    auto& branches = repository.branches;
+    for (auto it = branches.begin(); it != branches.end(); ++it) {
+        if (it->name == name) {
+            branches.erase(it);
+            return;
+        }
+    }
+
+    throw std::string("Branch not found: ") + name;
 }
