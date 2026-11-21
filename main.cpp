@@ -210,6 +210,24 @@ int main() {
                     }
 
                     workspace.log();
+                } else if (subcommand == "branch") {
+                    const std::string usage = "Usage: git branch [<name> | -d <name>]";
+                    std::string argument;
+
+                    if (!(input >> argument)) {
+                        workspace.listBranches();
+                    } else if (argument == "-d") {
+                        std::string name;
+                        if (!(input >> name) || (input >> extra)) {
+                            throw usage;
+                        }
+                        workspace.deleteBranch(name);
+                    } else {
+                        if (input >> extra) {
+                            throw usage;
+                        }
+                        workspace.createBranch(argument);
+                    }
                 } else {
                     throw std::string("Unknown command: " + command);
                 }

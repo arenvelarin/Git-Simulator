@@ -573,3 +573,63 @@ void Workspace::log() {
                   << "    " << it->message << '\n';
     }
 }
+
+void Workspace::listBranches() {
+    const Repository& repository = currentRepository();
+    std::vector<std::string> names;
+
+    for (const Branch& branch : repository.branches) {
+        names.push_back(branch.name);
+    }
+
+    std::sort(names.begin(), names.end());
+
+    for (const std::string& name : names) {
+        std::cout << (name == repository.branchName ? "* " : "  ")
+                  << name << '\n';
+    }
+}
+
+void Workspace::createBranch(const std::string& name) {
+    Repository& repository = currentRepository();
+
+    const std::string allowed =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-";
+
+    if (name.empty() ||
+        name.find_first_not_of(allowed) != std::string::npos ||
+        name.find_first_not_of("0123456789") == std::string::npos) {
+        throw std::string("Invalid branch name: ") + name;
+    }
+
+    const int tipCommitId = activeBranch(repository).tipCommitId;
+    if (tipCommitId == 0) {
+        throw std::string("No commits yet");
+    }
+
+    for (const Branch& branch : repository.branches) {
+        if (branch.name == name) {
+            throw std::string("Branch already exists: ") + name;
+        }
+    }
+
+    repository.branches.push_back(Branch{name, tipCommitId});
+}
+
+void Workspace::deleteBranch(const std::string& name) {
+    Repository& repository = currentRepository();
+
+    if (name == repository.branchName) {
+        throw std::string("Cannot delete the active branch: ") + name;
+    }
+
+    auto& branches = repository.branches;
+    for (auto it = branches.begin(); it != branches.end(); ++it) {
+        if (it->name == name) {
+            branches.erase(it);
+            return;
+        }
+    }
+
+    throw std::string("Branch not found: ") + name;
+}

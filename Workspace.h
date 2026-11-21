@@ -77,6 +77,9 @@ public:
                 const std::string& authorEmail);
     void status();
     void log();
+    void listBranches();
+    void createBranch(const std::string& name);
+    void deleteBranch(const std::string& name);
 };
 
 #endif
