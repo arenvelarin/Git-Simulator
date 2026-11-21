@@ -45,6 +45,8 @@ private:
 
     static Branch& activeBranch(Repository& repository);
     static const Commit* findCommit(const Repository& repository, int id);
+    static int headCommitId(Repository& repository);
+    void ensureCheckoutClean(Repository& repository);
 
     static bool sameSnapshot(const std::vector<StagedFile>& left,
                              const std::vector<StagedFile>& right);
@@ -80,6 +82,7 @@ public:
     void listBranches();
     void createBranch(const std::string& name);
     void deleteBranch(const std::string& name);
+    void checkout(const std::string& name);
 };
 
 #endif
