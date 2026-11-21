@@ -25,17 +25,26 @@ private:
         std::vector<StagedFile> snapshot;
     };
 
+    struct Branch {
+        std::string name;
+        int tipCommitId;  
+    };
+
     struct Repository {
         Directory* root;
         std::string branchName;
         std::vector<StagedFile> staging;
         std::vector<Commit> commits;
+        std::vector<Branch> branches;
     };
 
     std::vector<Repository> repositories;
     int nextCommitId = 1;
 
     Repository& currentRepository();
+
+    static Branch& activeBranch(Repository& repository);
+    static const Commit* findCommit(const Repository& repository, int id);
 
     static bool sameSnapshot(const std::vector<StagedFile>& left,
                              const std::vector<StagedFile>& right);

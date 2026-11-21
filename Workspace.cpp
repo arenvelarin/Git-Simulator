@@ -219,7 +219,7 @@ void Workspace::initRepository() {
         throw std::string("Already inside a git repository");
     }
 
-    repositories.push_back(Repository{current, "main", {}, {}});
+    repositories.push_back(Repository{current, "main", {}, {}, {{"main", 0}}});
 }
 
 std::string Workspace::relativeDirectoryPath(
@@ -359,6 +359,27 @@ bool Workspace::sameSnapshot(const std::vector<StagedFile>& left,
     return true;
 }
 
+Workspace::Branch& Workspace::activeBranch(Repository& repository) {
+    for (Branch& branch : repository.branches) {
+        if (branch.name == repository.branchName) {
+            return branch;
+        }
+    }
+
+    throw std::string("Active branch not found");
+}
+
+const Workspace::Commit* Workspace::findCommit(
+    const Repository& repository, int id) {
+    for (const Commit& commit : repository.commits) {
+        if (commit.id == id) {
+            return &commit;
+        }
+    }
+
+    return nullptr;
+}
+
 void Workspace::commit(const std::string& message,
                        const std::string& authorName,
                        const std::string& authorEmail) {
@@ -368,11 +389,10 @@ void Workspace::commit(const std::string& message,
         throw std::string("Set user.name and user.email before committing");
     }
 
-    const bool hasCommit = !repository.commits.empty();
+    Branch& branch = activeBranch(repository);
+    const Commit* head = findCommit(repository, branch.tipCommitId);
     const std::vector<StagedFile> emptySnapshot;
-    const auto& previous = hasCommit
-        ? repository.commits.back().snapshot
-        : emptySnapshot;
+    const auto& previous = head != nullptr ? head->snapshot : emptySnapshot;
 
     if (sameSnapshot(repository.staging, previous)) {
         std::vector<StagedFile> workingFiles;
@@ -387,7 +407,7 @@ void Workspace::commit(const std::string& message,
         return;
     }
 
-    const int parentId = hasCommit ? repository.commits.back().id : 0;
+    const int parentId = branch.tipCommitId;
     const std::time_t now = std::time(nullptr);
     const std::tm* localTime = std::localtime(&now);
 
@@ -403,6 +423,7 @@ void Workspace::commit(const std::string& message,
         id, parentId, message, authorName, authorEmail,
         date.str(), repository.staging
     });
+    branch.tipCommitId = id;
     ++nextCommitId;
 
     std::cout << '[' << repository.branchName << ' ' << id
