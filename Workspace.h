@@ -36,6 +36,7 @@ private:
         std::vector<StagedFile> staging;
         std::vector<Commit> commits;
         std::vector<Branch> branches;
+        int detachedCommitId = 0; // 0 means HEAD is attached to a branch
     };
 
     std::vector<Repository> repositories;

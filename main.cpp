@@ -231,7 +231,7 @@ int main() {
                 } else if (subcommand == "checkout") {
                     std::string target, extraArgument;
                     if (!(input >> target) || (input >> extraArgument)) {
-                        throw std::string("Usage: git checkout <branch-name>");
+                        throw std::string("Usage: git checkout <branch-name|commit-id>");
                     }
 
                     workspace.checkout(target);

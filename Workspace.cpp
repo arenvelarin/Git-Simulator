@@ -381,6 +381,10 @@ const Workspace::Commit* Workspace::findCommit(
 }
 
 int Workspace::headCommitId(Repository& repository) {
+    if (repository.detachedCommitId != 0) {
+        return repository.detachedCommitId;
+    }
+
     return activeBranch(repository).tipCommitId;
 }
 
@@ -415,6 +419,10 @@ void Workspace::commit(const std::string& message,
                        const std::string& authorName,
                        const std::string& authorEmail) {
     Repository& repository = currentRepository();
+
+    if (repository.detachedCommitId != 0) {
+        throw std::string("Cannot commit in detached HEAD state");
+    }
 
     if (authorName.empty() || authorEmail.empty()) {
         throw std::string("Set user.name and user.email before committing");
@@ -571,7 +579,11 @@ void Workspace::status() {
         }
     };
 
-    std::cout << "On branch " << repository.branchName << '\n';
+    if (repository.detachedCommitId != 0) {
+        std::cout << "HEAD detached at " << repository.detachedCommitId << '\n';
+    } else {
+        std::cout << "On branch " << repository.branchName << '\n';
+    }
 
     if (stagedChanges.empty() && unstagedChanges.empty() &&
         untrackedFiles.empty()) {
@@ -617,7 +629,8 @@ void Workspace::listBranches() {
     std::sort(names.begin(), names.end());
 
     for (const std::string& name : names) {
-        std::cout << (name == repository.branchName ? "* " : "  ")
+        std::cout << (repository.detachedCommitId == 0 &&
+                      name == repository.branchName ? "* " : "  ")
                   << name << '\n';
     }
 }
@@ -634,7 +647,7 @@ void Workspace::createBranch(const std::string& name) {
         throw std::string("Invalid branch name: ") + name;
     }
 
-    const int tipCommitId = activeBranch(repository).tipCommitId;
+    const int tipCommitId = headCommitId(repository);
     if (tipCommitId == 0) {
         throw std::string("No commits yet");
     }
@@ -651,7 +664,7 @@ void Workspace::createBranch(const std::string& name) {
 void Workspace::deleteBranch(const std::string& name) {
     Repository& repository = currentRepository();
 
-    if (name == repository.branchName) {
+    if (repository.detachedCommitId == 0 && name == repository.branchName) {
         throw std::string("Cannot delete the active branch: ") + name;
     }
 
@@ -669,26 +682,50 @@ void Workspace::deleteBranch(const std::string& name) {
 void Workspace::checkout(const std::string& name) {
     Repository& repository = currentRepository();
 
-    const Branch* targetBranch = nullptr;
-    for (const Branch& branch : repository.branches) {
-        if (branch.name == name) {
-            targetBranch = &branch;
+    bool byId = !name.empty();
+    for (char ch : name) {
+        if (ch < '0' || ch > '9') {
+            byId = false;
             break;
         }
     }
 
-    if (targetBranch == nullptr) {
-        throw std::string("Branch not found: ") + name;
-    }
+    const Commit* target = nullptr;
 
-    if (name == repository.branchName) {
-        std::cout << "Already on '" << name << "'\n";
-        return;
+    if (byId) {
+        for (const Commit& commit : repository.commits) {
+            if (std::to_string(commit.id) == name) {
+                target = &commit;
+                break;
+            }
+        }
+
+        if (target == nullptr) {
+            throw std::string("Commit not found: ") + name;
+        }
+    } else {
+        const Branch* targetBranch = nullptr;
+        for (const Branch& branch : repository.branches) {
+            if (branch.name == name) {
+                targetBranch = &branch;
+                break;
+            }
+        }
+
+        if (targetBranch == nullptr) {
+            throw std::string("Branch not found: ") + name;
+        }
+
+        if (repository.detachedCommitId == 0 && name == repository.branchName) {
+            std::cout << "Already on '" << name << "'\n";
+            return;
+        }
+
+        target = findCommit(repository, targetBranch->tipCommitId);
     }
 
     ensureCheckoutClean(repository);
 
-    const Commit* target = findCommit(repository, targetBranch->tipCommitId);
     const std::vector<StagedFile> emptySnapshot;
     const auto& destination = target != nullptr ? target->snapshot : emptySnapshot;
 
@@ -808,6 +845,13 @@ void Workspace::checkout(const std::string& name) {
     }
 
     repository.staging = destination;
-    repository.branchName = name;
-    std::cout << "Switched to branch '" << name << "'\n";
+
+    if (byId) {
+        repository.detachedCommitId = target->id;
+        std::cout << "HEAD detached at " << target->id << '\n';
+    } else {
+        repository.branchName = name;
+        repository.detachedCommitId = 0;
+        std::cout << "Switched to branch '" << name << "'\n";
+    }
 }
